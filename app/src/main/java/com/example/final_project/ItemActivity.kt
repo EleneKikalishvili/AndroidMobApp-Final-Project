@@ -4,18 +4,17 @@ import android.annotation.SuppressLint
 import android.content.DialogInterface
 import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
-import android.view.LayoutInflater
-import android.view.MotionEvent
-import android.view.View
-import android.view.ViewGroup
+import android.view.*
 import android.widget.CheckBox
 import android.widget.EditText
 import android.widget.ImageView
 import androidx.appcompat.app.AlertDialog
+import androidx.recyclerview.widget.ItemTouchHelper
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.example.final_project.DTO.ToDoItem
 import kotlinx.android.synthetic.main.activity_item.*
+import java.util.*
 
 class ItemActivity : AppCompatActivity() {
 
@@ -24,6 +23,7 @@ class ItemActivity : AppCompatActivity() {
 
     var list: MutableList<ToDoItem>? = null
     var adapter : ItemAdapter? = null
+    var touchHelper : ItemTouchHelper? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -58,6 +58,50 @@ class ItemActivity : AppCompatActivity() {
             }
             dialog.show()
         }
+
+        touchHelper = ItemTouchHelper(object : ItemTouchHelper.SimpleCallback(ItemTouchHelper.UP or ItemTouchHelper.DOWN, 0) {
+            override fun onMove(
+                p0: RecyclerView,
+                p1: RecyclerView.ViewHolder,
+                p2: RecyclerView.ViewHolder
+            ): Boolean {
+                val sourcePosition = p1.adapterPosition
+                val targetPosition = p2.adapterPosition
+                Collections.swap(list,sourcePosition,targetPosition)
+                adapter?.notifyItemMoved(sourcePosition,targetPosition)
+                return true
+            }
+
+            override fun onSwiped(p0: RecyclerView.ViewHolder, p1: Int) {
+                TODO("not implemented")
+            }
+
+        })
+
+        touchHelper?.attachToRecyclerView(rv_item)
+
+    }
+
+    fun updateItem(item: ToDoItem) {
+        val dialog = AlertDialog.Builder(this)
+        dialog.setTitle("Update ToDo Item")
+        val view = layoutInflater.inflate(R.layout.dialog_dashboard, null)
+        val toDoName = view.findViewById<EditText>(R.id.ev_todo)
+        toDoName.setText(item.itemName)
+        dialog.setView(view)
+        dialog.setPositiveButton("Update") { _: DialogInterface, _: Int ->
+            if (toDoName.text.isNotEmpty()) {
+                item.itemName = toDoName.text.toString()
+                item.toDoId = todoId
+                item.isCompleted = false
+                dbHandler.updateToDoItem(item)
+                refreshList()
+            }
+        }
+        dialog.setNegativeButton("Cancel") { _: DialogInterface, _: Int ->
+
+        }
+        dialog.show()
     }
 
     override fun onResume() {
@@ -89,11 +133,45 @@ class ItemActivity : AppCompatActivity() {
                 list[p1].isCompleted = !list[p1].isCompleted
                 activity.dbHandler.updateToDoItem(list[p1])
             }
+            holder.delete.setOnClickListener {
+                val dialog = AlertDialog.Builder(activity)
+                dialog.setTitle("Are you sure")
+                dialog.setMessage("Do you want to delete this item ?")
+                dialog.setPositiveButton("Continue") { _: DialogInterface, _: Int ->
+                    activity.dbHandler.deleteToDoItem(list[p1].id)
+                    activity.refreshList()
+                }
+                dialog.setNegativeButton("Cancel") { _: DialogInterface, _: Int ->
 
+                }
+                dialog.show()
+            }
+            holder.edit.setOnClickListener {
+                activity.updateItem(list[p1])
+            }
+
+            holder.move.setOnTouchListener { v, event ->
+                if(event.actionMasked== MotionEvent.ACTION_DOWN){
+                    activity.touchHelper?.startDrag(holder)
+                }
+                false
+            }
         }
 
         class ViewHolder(v: View) : RecyclerView.ViewHolder(v) {
             val itemName: CheckBox = v.findViewById(R.id.cb_item)
+            val edit: ImageView = v.findViewById(R.id.iv_edit)
+            val delete: ImageView = v.findViewById(R.id.iv_delete)
+            val move: ImageView = v.findViewById(R.id.iv_move)
         }
     }
+
+    override fun onOptionsItemSelected(item: MenuItem?): Boolean {
+        return if (item?.itemId == android.R.id.home) {
+            finish()
+            true
+        } else
+            super.onOptionsItemSelected(item)
+    }
+
 }
